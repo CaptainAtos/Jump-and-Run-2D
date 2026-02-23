@@ -3,16 +3,21 @@ using UnityEngine;
 public class PlayerController2D : MonoBehaviour
 {
     [Header("Bewegung")]
-    public float moveForce = 12f;         // Kraft für horizontale Bewegung
-    public float maxSpeed = 5f;           // Normale Maximalgeschwindigkeit
-    public float sprintMultiplier = 2f;   // Wie viel schneller beim Sprinten
+    public float maxSpeed = 3f;
+    public float sprintMultiplier = 2f;
+    public float acceleration = 15f;
+    public float deceleration = 20f;
 
     [Header("Springen")]
-    public float jumpForce = 7f;          // Sprungkraft
-    private bool canDoubleJump;           // Doppelsprung erlaubt?
+    public float jumpForce = 12f;
+    private bool canDoubleJump;
+
+    [Header("Coyote Time")]
+    public float coyoteTime = 0.1f;   // Wie lange man nach Verlassen des Bodens noch springen darf
+    private float coyoteTimeCounter;  // Timer der runterzählt
 
     [Header("Fallen")]
-    public float fallMultiplier = 2f;     // Schneller fallen
+    public float fallMultiplier = 25f;
 
     [Header("Bodencheck")]
     public Rigidbody2D rb;
@@ -21,45 +26,47 @@ public class PlayerController2D : MonoBehaviour
     public LayerMask groundLayer;
     private bool isGrounded;
 
-    [Header("Fast Stop")]
-    [Range(0.05f, 0.5f)]
-    public float brakeFactor = 0.2f;      // Geschwindigkeit beim Loslassen reduzieren
-
     void Update()
     {
-        // -----------------------------
-        // Bodencheck
-        // -----------------------------
-        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundRadius, groundLayer);
+        // Prüft ob der Boden berührt wird
+        isGrounded = Physics2D.OverlapCircle(
+            groundCheck.position,
+            groundRadius,
+            groundLayer
+        );
 
+        // Wenn wir am Boden sind:
         if (isGrounded)
         {
-            canDoubleJump = true; // Doppelsprung wieder verfügbar
+            coyoteTimeCounter = coyoteTime; // Timer zurücksetzen
+            canDoubleJump = true;           // Double Jump wieder erlauben
+        }
+        else
+        {
+            coyoteTimeCounter -= Time.deltaTime; // Timer runterzählen
         }
 
-        // -----------------------------
         // Springen
-        // -----------------------------
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            if (isGrounded)
+            // Springen wenn:
+            // - wir noch in der Coyote Time sind
+            if (coyoteTimeCounter > 0f)
             {
                 Jump();
+                coyoteTimeCounter = 0f; // Verhindert mehrfaches Springen
             }
+            // oder wenn Double Jump verfügbar ist
             else if (canDoubleJump)
             {
                 Jump();
-                canDoubleJump = false; // Doppelsprung verbraucht
+                canDoubleJump = false; // Double Jump verbrauchen
             }
         }
     }
-
     void FixedUpdate()
     {
-        // -----------------------------
-        // Horizontale Bewegung
-        // -----------------------------
-        float input = Input.GetAxisRaw("Horizontal"); // A/D oder Pfeile
+        float input = Input.GetAxisRaw("Horizontal");
 
         // Sprint prüfen
         float currentMaxSpeed = maxSpeed;
@@ -68,26 +75,31 @@ public class PlayerController2D : MonoBehaviour
             currentMaxSpeed *= sprintMultiplier;
         }
 
-        if (input != 0)
-        {
-            // Beschleunigen nur wenn unter MaxSpeed
-            if (Mathf.Abs(rb.linearVelocity.x) < currentMaxSpeed)
-            {
-                rb.AddForce(new Vector2(input * moveForce, 0f), ForceMode2D.Force);
-            }
-        }
-        else
-        {
-            // Fast Stop: Geschwindigkeit stark reduzieren
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x * brakeFactor, rb.linearVelocity.y);
-        }
+        // Zielgeschwindigkeit berechnen
+        float targetSpeed = input * currentMaxSpeed;
 
-        // -----------------------------
+        // Unterschied zwischen aktueller und Zielgeschwindigkeit
+        float speedDifference = targetSpeed - rb.linearVelocity.x;
+
+        // Entscheiden ob beschleunigt oder gebremst wird
+        float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? acceleration : deceleration;
+
+        // Bewegung berechnen
+        float movement = speedDifference * accelRate * Time.fixedDeltaTime;
+
+        // Neue Geschwindigkeit setzen
+        rb.linearVelocity = new Vector2(
+            rb.linearVelocity.x + movement,
+            rb.linearVelocity.y
+        );
+
         // Schneller fallen
-        // -----------------------------
         if (rb.linearVelocity.y < 0)
         {
-            rb.AddForce(Vector2.down * fallMultiplier, ForceMode2D.Force);
+            rb.linearVelocity = new Vector2(
+                rb.linearVelocity.x,
+                rb.linearVelocity.y - fallMultiplier * Time.fixedDeltaTime
+            );
         }
     }
 
@@ -96,13 +108,13 @@ public class PlayerController2D : MonoBehaviour
         // Y-Geschwindigkeit zurücksetzen
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
 
-        // Sprungkraft als Impuls
-        rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+        // Neue Sprunggeschwindigkeit setzen
+        rb.linearVelocity = new Vector2(
+            rb.linearVelocity.x,
+            jumpForce
+        );
     }
 
-    // -----------------------------
-    // Bodencheck-Gizmo
-    // -----------------------------
     void OnDrawGizmos()
     {
         if (groundCheck != null)
