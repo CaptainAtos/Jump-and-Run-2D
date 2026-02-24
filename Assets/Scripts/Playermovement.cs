@@ -24,18 +24,22 @@ public class PlayerController2D : MonoBehaviour
     public Transform groundCheck;
     public float groundRadius = 0.2f;
     public LayerMask groundLayer;
+    public LayerMask wallLayer;
     private bool isGrounded;
+    private bool isWalled;
 
     void Update()
     {
-        // Prüft ob der Boden berührt wird
         isGrounded = Physics2D.OverlapCircle(
             groundCheck.position,
             groundRadius,
-            groundLayer
-        );
+            groundLayer);
 
-        // Wenn wir am Boden sind:
+        isWalled = Physics2D.OverlapCircle(
+            groundCheck.position,
+            groundRadius,
+            wallLayer);
+
         if (isGrounded)
         {
             coyoteTimeCounter = coyoteTime; // Timer zurücksetzen
@@ -45,22 +49,23 @@ public class PlayerController2D : MonoBehaviour
         {
             coyoteTimeCounter -= Time.deltaTime; // Timer runterzählen
         }
+        if (isWalled)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
 
+        }
         // Springen
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            // Springen wenn:
-            // - wir noch in der Coyote Time sind
             if (coyoteTimeCounter > 0f)
             {
                 Jump();
                 coyoteTimeCounter = 0f; // Verhindert mehrfaches Springen
             }
-            // oder wenn Double Jump verfügbar ist
             else if (canDoubleJump)
             {
                 Jump();
-                canDoubleJump = false; // Double Jump verbrauchen
+                canDoubleJump = false; // Double Jump verbraucht
             }
         }
     }
@@ -75,16 +80,11 @@ public class PlayerController2D : MonoBehaviour
             currentMaxSpeed *= sprintMultiplier;
         }
 
+
         // Zielgeschwindigkeit berechnen
         float targetSpeed = input * currentMaxSpeed;
-
-        // Unterschied zwischen aktueller und Zielgeschwindigkeit
         float speedDifference = targetSpeed - rb.linearVelocity.x;
-
-        // Entscheiden ob beschleunigt oder gebremst wird
         float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? acceleration : deceleration;
-
-        // Bewegung berechnen
         float movement = speedDifference * accelRate * Time.fixedDeltaTime;
 
         // Neue Geschwindigkeit setzen
@@ -109,10 +109,9 @@ public class PlayerController2D : MonoBehaviour
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
 
         // Neue Sprunggeschwindigkeit setzen
-        rb.linearVelocity = new Vector2(
-            rb.linearVelocity.x,
-            jumpForce
-        );
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+
+
     }
 
     void OnDrawGizmos()
